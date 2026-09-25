@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Unified Math Computation Tracker & Probe Engine</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --border: #e2e8f0;
+      --tier1: #10b981;
+      --tier2: #f59e0b;
+      --tier3: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 20px; }
+
+    header { display: flex; justify-content: space-between; align-items: center; background: #1e1b4b; color: white; padding: 15px 25px; border-radius: 12px; margin-bottom: 25px; }
+    header h1 { font-size: 1.4rem; }
+    .nav-btns button { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-left: 10px; }
+    .nav-btns button:hover { background: var(--primary-hover); }
+
+    .view-container { display: none; }
+    .view-container.active { display: block; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+    .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 20px; text-align: center; }
+    .stat-card .val { font-size: 1.8rem; font-weight: bold; color: var(--primary); }
+    .stat-card .lbl { font-size: 0.85rem; color: #64748b; }
+
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+
+    table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background: #f1f5f9; font-weight: 600; font-size: 0.9rem; }
+    tr:hover { background: #f8fafc; }
+
+    .student-link { color: var(--primary); text-decoration: none; font-weight: bold; cursor: pointer; }
+    .student-link:hover { text-decoration: underline; }
+
+    .tier-select { padding: 4px 8px; border-radius: 6px; font-weight: bold; border: 1px solid var(--border); cursor: pointer; }
+    .tier1-bg { background-color: #d1fae5; color: #065f46; }
+    .tier2-bg { background-color: #fef3c7; color: #92400e; }
+    .tier3-bg { background-color: #fee2e2; color: #991b1b; }
+
+    .btn-action { background: #e0e7ff; color: var(--primary); border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-right: 5px; }
+    .btn-action:hover { background: #c7d2fe; }
+
+    .probe-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; max-width: 600px; margin: 0 auto; padding: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    .timer { font-size: 2rem; font-weight: bold; color: var(--tier3); text-align: center; margin: 10px 0; }
+    .progress-counter { text-align: center; font-weight: bold; color: #64748b; font-size: 1.1rem; margin-top: 5px; }
+    .problem-box { font-size: 1.6rem; text-align: center; margin: 20px 0; background: #f1f5f9; padding: 20px; border-radius: 8px; }
+    .problem-box input { font-size: 1.4rem; width: 140px; text-align: center; padding: 6px; margin-left: 10px; border-radius: 6px; border: 1px solid var(--border); }
+
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
+    .modal-content { background: white; padding: 25px; border-radius: 12px; width: 420px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+    .modal-content h3 { margin-bottom: 15px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: bold; margin-bottom: 4px; }
+    .form-group input, .form-group select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+    .chart-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 25px; }
+    .back-btn { background: #64748b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-bottom: 20px; }
+    .hint { font-size: 0.85rem; color: #64748b; margin-top: 5px; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1 id="app-title">Math Computation Tracker & Assessment Engine</h1>
+    <div class="nav-btns" id="teacher-nav">
+      <button onclick="copyStudentLink()" style="background: #10b981;">🔗 Copy Student Link</button>
+      <button onclick="switchView('dashboard')">Teacher Dashboard</button>
+      <button onclick="switchView('probe')">Launch Student Probe</button>
+    </div>
+  </header>
+
+  <!-- VIEW 1: TEACHER DASHBOARD -->
+  <div id="dashboard" class="view-container active">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="val" id="stat-total-students">0</div><div class="lbl">Active Students</div></div>
+      <div class="stat-card"><div class="val" id="stat-avg-accuracy">0%</div><div class="lbl">Class Average Accuracy</div></div>
+      <div class="stat-card"><div class="val" id="stat-avg-dcpm">0</div><div class="lbl">Class Average DCPM</div></div>
+      <div class="stat-card"><div class="val" id="stat-tier-support">0</div><div class="lbl">Students in Tier 2/3</div></div>
+    </div>
+
+    <div class="section-header">
+      <h3>Class Roster & Focus Skill Performance (Click student name for progress graph)</h3>
+      <button onclick="openAddModal()" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold;">+ Add New Student</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Student Name</th>
+          <th>Grade</th>
+          <th>Target Computation Skill</th>
+          <th>Tests Logged</th>
+          <th>Avg Accuracy</th>
+          <th>Avg DCPM</th>
+          <th>Tier Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="roster-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- VIEW 2: INDIVIDUAL STUDENT PROGRESS GRAPHIC VIEW -->
+  <div id="student-detail" class="view-container">
+    <button class="back-btn" onclick="switchView('dashboard')">← Back to Class Dashboard</button>
+    
+    <div class="section-header">
+      <h2 id="detail-student-name">Student Progress</h2>
+      <span id="detail-student-tier" style="font-size: 1rem; padding: 6px 12px; border-radius: 20px; font-weight: bold; color: white; background: var(--primary);">Tier</span>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="val" id="detail-skill">-</div><div class="lbl">Assigned Focus Skill</div></div>
+      <div class="stat-card"><div class="val" id="detail-tests">0</div><div class="lbl">Probes Completed</div></div>
+      <div class="stat-card"><div class="val" id="detail-highest-dcpm">0</div><div class="lbl">Highest DCPM</div></div>
+      <div class="stat-card"><div class="val" id="detail-avg-acc">0%</div><div class="lbl">Average Accuracy</div></div>
+    </div>
+
+    <div class="chart-box">
+      <h3>DCPM Growth & Goal Trend</h3>
+      <canvas id="studentChart" height="100"></canvas>
+    </div>
+
+    <h3>Probe History Log</h3>
+    <br/>
+    <table>
+      <thead>
+        <tr>
+          <th>Date Logged</th>
+          <th>Skill Evaluated</th>
+          <th>Digits Correct Per Min (DCPM)</th>
+          <th>Accuracy %</th>
+        </tr>
+      </thead>
+      <tbody id="history-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- VIEW 3: STUDENT TIMED PROBE ENGINE -->
+  <div id="probe" class="view-container">
+    <div class="probe-card">
+      <h2 style="text-align: center;">Timed Computation Probe</h2>
+      
+      <div id="probe-setup">
+        <label style="display:block; margin: 15px 0 5px;"><strong>Select Your Name:</strong></label>
+        <select id="student-select" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border);" onchange="updateSkillLabel()"></select>
+        
+        <p id="skill-description" style="margin-top: 15px; background: #e0e7ff; padding: 12px; border-radius: 6px; font-size: 0.95rem;"></p>
+
+        <button onclick="startProbe()" style="width: 100%; margin-top: 20px; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer;">Begin 10-Question Probe</button>
+      </div>
+
+      <div id="probe-active" style="display: none;">
+        <div class="progress-counter" id="q-counter">Question 1 of 10</div>
+        <div class="timer" id="timer-display">02:00</div>
+        
+        <div class="problem-box">
+          <span id="math-problem">47 + 38 = </span>
+          <input type="text" id="student-answer" autocomplete="off" autofocus />
+        </div>
+        <div class="hint" id="format-hint">Enter answer and press Enter or Submit</div>
+        <br/>
+        <button onclick="submitAnswer()" style="width: 100%; padding: 10px; background: var(--tier1); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Submit & Next</button>
+      </div>
+
+      <div id="probe-results" style="display: none; text-align: center;">
+        <h3 style="color: var(--tier1); font-size: 1.5rem;">Probe Complete!</h3>
+        <p style="margin: 15px 0;">Digits Correct Per Minute (DCPM): <strong id="res-dcpm" style="font-size: 1.2rem;">0</strong></p>
+        <p>Accuracy: <strong id="res-accuracy" style="font-size: 1.2rem;">0%</strong></p>
+        <p style="margin-top: 10px; color: #64748b;">Great job! Your teacher has received your test results.</p>
+        <button id="return-btn" onclick="resetProbe()" style="margin-top: 20px; padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer;">Take Another Test</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD / EDIT STUDENT MODAL -->
+  <div class="modal" id="studentModal">
+    <div class="modal-content">
+      <h3 id="modalTitle">Add New Student</h3>
+      <input type="hidden" id="edit-student-id" />
+      <div class="form-group">
+        <label>Student Name</label>
+        <input type="text" id="edit-name" placeholder="e.g. Jordan Miller" />
+      </div>
+      <div class="form-group">
+        <label>Grade Level</label>
+        <input type="text" id="edit-grade" value="Grade 4" />
+      </div>
+      <div class="form-group">
+        <label>Target Computation Skill</label>
+        <select id="edit-skill">
+          <option value="Single/Double Addition">Single/Double Addition</option>
+          <option value="2-Digit Subtraction">2-Digit Subtraction</option>
+          <option value="Multiplication Facts">Multiplication Facts</option>
+          <option value="Multi-Digit Multiplication">Multi-Digit Multiplication</option>
+          <option value="Long Division">Long Division</option>
+          <option value="Decimal Addition & Subtraction">Decimal Addition & Subtraction</option>
+          <option value="Fraction Operations">Fraction Operations</option>
+          <option value="Integers & Signed Ops">Integers & Signed Ops</option>
+          <option value="Order of Operations">Order of Operations</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tier Support Level</label>
+        <select id="edit-tier">
+          <option value="Tier 1">Tier 1 (Core)</option>
+          <option value="Tier 2">Tier 2 (Targeted)</option>
+          <option value="Tier 3">Tier 3 (Intensive)</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeModal()" style="padding: 8px 16px; border: 1px solid var(--border); background: white; border-radius: 6px; cursor: pointer;">Cancel</button>
+        <button onclick="saveStudent()" style="padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Save Student</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // NPOINT CONFIGURATION
+    const NPOINT_ID = "5df73e5314f1edbb5a74";
+    const API_URL = `https://api.npoint.io/${NPOINT_ID}`;
+
+    let roster = [];
+    let currentStudent = null;
+    let timerInterval = null;
+    let timeLeft = 120;
+    let timeElapsed = 0;
+    let questionIndex = 0;
+    const TOTAL_QUESTIONS = 10;
+    let currentProblem = {};
+    let correctDigitsLogged = 0;
+    let totalDigitsAttempted = 0;
+    let myChartInstance = null;
+    let isStudentOnlyMode = false;
+
+    window.onload = function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('student') === 'true' || urlParams.get('mode') === 'student') {
+        isStudentOnlyMode = true;
+        document.getElementById('teacher-nav').style.display = 'none';
+        document.getElementById('app-title').innerText = "Student Computation Probe";
+        switchView('probe');
+      }
+      loadRosterFromDB();
+    };
+
+    // Load data from npoint.io
+    async function loadRosterFromDB() {
+      try {
+        const res = await fetch(API_URL);
+        const data = await res.json();
+        if (data) {
+          roster = Array.isArray(data) ? data : [];
+        }
+      } catch (err) {
+        console.error("npoint load error:", err);
+      }
+
+      if (!isStudentOnlyMode) renderDashboard();
+      if (document.getElementById('probe').classList.contains('active')) populateStudentDropdown();
+    }
+
+    // Save current roster state to npoint.io
+    async function syncToDB() {
+      try {
+        await fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(roster)
+        });
+      } catch (err) {
+        console.error("npoint sync error:", err);
+      }
+    }
+
+    document.getElementById('student-answer').addEventListener('keyup', function(e) {
+      if (e.key === 'Enter') submitAnswer();
+    });
+
+    function copyStudentLink() {
+      const studentUrl = window.location.origin + window.location.pathname + '?student=true';
+      navigator.clipboard.writeText(studentUrl);
+      alert("Student Link Copied!\nShare this link with students:\n" + studentUrl);
+    }
+
+    function switchView(viewId) {
+      if (isStudentOnlyMode && viewId !== 'probe') return;
+
+      document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
+      document.getElementById(viewId).classList.add('active');
+      if (viewId === 'dashboard') renderDashboard();
+      if (viewId === 'probe') populateStudentDropdown();
+    }
+
+    function renderDashboard() {
+      const tbody = document.getElementById('roster-tbody');
+      tbody.innerHTML = '';
+      let sumAcc = 0, sumDcpm = 0, tierSupport = 0;
+
+      roster.forEach(s => {
+        sumAcc += s.avgAcc || 0;
+        sumDcpm += s.avgDcpm || 0;
+        if (s.tier !== 'Tier 1') tierSupport++;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><a class="student-link" onclick="openStudentDetail(${s.id})">${s.name}</a></td>
+          <td>${s.grade}</td>
+          <td>${s.skill}</td>
+          <td>${s.tests ? s.tests.length : 0}</td>
+          <td>${s.avgAcc || 0}%</td>
+          <td>${s.avgDcpm || 0}</td>
+          <td>
+            <select class="tier-select ${getTierClass(s.tier)}" onchange="updateStudentTier(${s.id}, this.value)">
+              <option value="Tier 1" ${s.tier === 'Tier 1' ? 'selected' : ''}>Tier 1</option>
+              <option value="Tier 2" ${s.tier === 'Tier 2' ? 'selected' : ''}>Tier 2</option>
+              <option value="Tier 3" ${s.tier === 'Tier 3' ? 'selected' : ''}>Tier 3</option>
+            </select>
+          </td>
+          <td>
+            <button class="btn-action" onclick="openStudentDetail(${s.id})">View Progress</button>
+            <button class="btn-action" onclick="openEditModal(${s.id})">Edit</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('stat-total-students').innerText = roster.length;
+      document.getElementById('stat-avg-accuracy').innerText = roster.length ? Math.round(sumAcc / roster.length) + '%' : '0%';
+      document.getElementById('stat-avg-dcpm').innerText = roster.length ? Math.round(sumDcpm / roster.length) : 0;
+      document.getElementById('stat-tier-support').innerText = tierSupport;
+    }
+
+    function openStudentDetail(id) {
+      const student = roster.find(s => s.id === id);
+      if (!student) return;
+
+      document.getElementById('detail-student-name').innerText = student.name + " - Progress Graphic";
+      document.getElementById('detail-student-tier').innerText = student.tier;
+      document.getElementById('detail-student-tier').className = 'badge ' + getTierClass(student.tier);
+      document.getElementById('detail-skill').innerText = student.skill;
+      document.getElementById('detail-tests').innerText = student.tests ? student.tests.length : 0;
+
+      let highest = 0, sumAcc = 0;
+      if (student.tests) {
+        student.tests.forEach(t => {
+          if (t.dcpm > highest) highest = t.dcpm;
+          sumAcc += t.acc;
+        });
+      }
+
+      document.getElementById('detail-highest-dcpm').innerText = highest;
+      document.getElementById('detail-avg-acc').innerText = (student.tests && student.tests.length) ? Math.round(sumAcc / student.tests.length) + '%' : '0%';
+
+      const tbody = document.getElementById('history-tbody');
+      tbody.innerHTML = '';
+      if (student.tests) {
+        student.tests.forEach(t => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${t.date}</td>
+            <td>${student.skill}</td>
+            <td><strong>${t.dcpm}</strong> DCPM</td>
+            <td>${t.acc}%</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      renderStudentChart(student);
+      switchView('student-detail');
+    }
+
+    function renderStudentChart(student) {
+      const ctx = document.getElementById('studentChart').getContext('2d');
+      if (myChartInstance) myChartInstance.destroy();
+
+      const tests = student.tests || [];
+      const labels = tests.map((t, idx) => `Probe ${idx + 1} (${t.date})`);
+      const dcpmData = tests.map(t => t.dcpm);
+
+      myChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels.length ? labels : ['No Probes Logged'],
+          datasets: [{
+            label: 'Digits Correct Per Minute (DCPM)',
+            data: dcpmData.length ? dcpmData : [0],
+            borderColor: '#4f46e5',
+            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 6,
+            pointHoverRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'DCPM Score' }
+            }
+          }
+        }
+      });
+    }
+
+    function getTierClass(tier) {
+      if (tier === 'Tier 1') return 'tier1-bg';
+      if (tier === 'Tier 2') return 'tier2-bg';
+      return 'tier3-bg';
+    }
+
+    function updateStudentTier(id, newTier) {
+      const student = roster.find(s => s.id === id);
+      if (student) {
+        student.tier = newTier;
+        syncToDB();
+        renderDashboard();
+      }
+    }
+
+    function openAddModal() {
+      document.getElementById('modalTitle').innerText = "Add New Student";
+      document.getElementById('edit-student-id').value = "";
+      document.getElementById('edit-name').value = "";
+      document.getElementById('edit-grade').value = "Grade 4";
+      document.getElementById('edit-skill').value = "Single/Double Addition";
+      document.getElementById('edit-tier').value = "Tier 1";
+      document.getElementById('studentModal').style.display = 'flex';
+    }
+
+    function openEditModal(id) {
+      const student = roster.find(s => s.id === id);
+      if (student) {
+        document.getElementById('modalTitle').innerText = "Edit Student Details";
+        document.getElementById('edit-student-id').value = student.id;
+        document.getElementById('edit-name').value = student.name;
+        document.getElementById('edit-grade').value = student.grade;
+        document.getElementById('edit-skill').value = student.skill;
+        document.getElementById('edit-tier').value = student.tier;
+        document.getElementById('studentModal').style.display = 'flex';
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('studentModal').style.display = 'none';
+    }
+
+    function saveStudent() {
+      const id = document.getElementById('edit-student-id').value;
+      const name = document.getElementById('edit-name').value.trim();
+      const grade = document.getElementById('edit-grade').value.trim();
+      const skill = document.getElementById('edit-skill').value;
+      const tier = document.getElementById('edit-tier').value;
+
+      if (!name) return alert("Please enter a student name.");
+
+      if (id) {
+        const student = roster.find(s => s.id === parseInt(id));
+        if (student) {
+          student.name = name;
+          student.grade = grade;
+          student.skill = skill;
+          student.tier = tier;
+        }
+      } else {
+        roster.push({ id: Date.now(), name, grade, skill, tier, tests: [], avgAcc: 0, avgDcpm: 0 });
+      }
+
+      closeModal();
+      syncToDB();
+      renderDashboard();
+    }
+
+    function populateStudentDropdown() {
+      const select = document.getElementById('student-select');
+      select.innerHTML = '';
+      roster.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.innerText = s.name;
+        select.appendChild(opt);
+      });
+      updateSkillLabel();
+    }
+
+    function updateSkillLabel() {
+      const id = parseInt(document.getElementById('student-select').value);
+      const student = roster.find(s => s.id === id);
+      if (student) {
+        document.getElementById('skill-description').innerHTML = `<strong>Assigned Skill:</strong> ${student.skill}`;
+      }
+    }
+
+    function generateProblem(skill) {
+      let n1, n2, n3, ans, text, hint = "";
+
+      switch(skill) {
+        case "Single/Double Addition":
+          n1 = Math.floor(Math.random() * 40) + 10;
+          n2 = Math.floor(Math.random() * 40) + 5;
+          ans = (n1 + n2).toString();
+          text = `${n1} + ${n2} = `;
+          break;
+        case "2-Digit Subtraction":
+          n1 = Math.floor(Math.random() * 50) + 40;
+          n2 = Math.floor(Math.random() * 30) + 10;
+          ans = (n1 - n2).toString();
+          text = `${n1} - ${n2} = `;
+          break;
+        case "Multiplication Facts":
+          n1 = Math.floor(Math.random() * 11) + 2;
+          n2 = Math.floor(Math.random() * 11) + 2;
+          ans = (n1 * n2).toString();
+          text = `${n1} × ${n2} = `;
+          break;
+        case "Multi-Digit Multiplication":
+          n1 = Math.floor(Math.random() * 80) + 12;
+          n2 = Math.floor(Math.random() * 15) + 11;
+          ans = (n1 * n2).toString();
+          text = `${n1} × ${n2} = `;
+          break;
+        case "Long Division":
+          n2 = Math.floor(Math.random() * 8) + 2;
+          let quotient = Math.floor(Math.random() * 30) + 10;
+          let rem = Math.floor(Math.random() * (n2 - 1));
+          n1 = (n2 * quotient) + rem;
+          ans = rem > 0 ? `${quotient}R${rem}` : `${quotient}`;
+          text = `${n1} ÷ ${n2} = `;
+          hint = "Format remainder as '36R1' or '36'";
+          break;
+        case "Decimal Addition & Subtraction":
+          n1 = (Math.random() * 20 + 5).toFixed(1);
+          n2 = (Math.random() * 10 + 1).toFixed(1);
+          ans = (parseFloat(n1) + parseFloat(n2)).toFixed(1);
+          text = `${n1} + ${n2} = `;
+          break;
+        case "Fraction Operations":
+          let den = 4;
+          let num1 = Math.floor(Math.random() * 3) + 1;
+          let num2 = Math.floor(Math.random() * 3) + 1;
+          ans = `${num1 + num2}/${den}`;
+          text = `${num1}/${den} + ${num2}/${den} = `;
+          hint = "Format answer as fraction e.g. 3/4";
+          break;
+        case "Integers & Signed Ops":
+          n1 = Math.floor(Math.random() * 20) - 10;
+          n2 = Math.floor(Math.random() * 20) - 10;
+          ans = (n1 + n2).toString();
+          text = `(${n1}) + (${n2}) = `;
+          break;
+        case "Order of Operations":
+          n1 = Math.floor(Math.random() * 10) + 2;
+          n2 = Math.floor(Math.random() * 5) + 2;
+          n3 = Math.floor(Math.random() * 5) + 1;
+          ans = (n1 + (n2 * n3)).toString();
+          text = `${n1} + ${n2} × ${n3} = `;
+          break;
+        default:
+          n1 = Math.floor(Math.random() * 20) + 5;
+          n2 = Math.floor(Math.random() * 20) + 5;
+          ans = (n1 + n2).toString();
+          text = `${n1} + ${n2} = `;
+      }
+
+      return { text, ans, hint };
+    }
+
+    function startProbe() {
+      const id = parseInt(document.getElementById('student-select').value);
+      currentStudent = roster.find(s => s.id === id);
+      
+      document.getElementById('probe-setup').style.display = 'none';
+      document.getElementById('probe-active').style.display = 'block';
+      
+      timeLeft = 120;
+      timeElapsed = 0;
+      questionIndex = 0;
+      correctDigitsLogged = 0;
+      totalDigitsAttempted = 0;
+
+      nextProblem();
+
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        timeElapsed++;
+        let mins = Math.floor(timeLeft / 60);
+        let secs = timeLeft % 60;
+        document.getElementById('timer-display').innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        
+        if (timeLeft <= 0) finishProbe();
+      }, 1000);
+    }
+
+    function nextProblem() {
+      if (questionIndex >= TOTAL_QUESTIONS) {
+        finishProbe();
+        return;
+      }
+
+      questionIndex++;
+      document.getElementById('q-counter').innerText = `Question ${questionIndex} of ${TOTAL_QUESTIONS}`;
+
+      currentProblem = generateProblem(currentStudent.skill);
+      document.getElementById('math-problem').innerText = currentProblem.text;
+      document.getElementById('format-hint').innerText = currentProblem.hint || "Enter answer and press Enter or Submit";
+      document.getElementById('student-answer').value = '';
+      document.getElementById('student-answer').focus();
+    }
+
+    function submitAnswer() {
+      const userAns = document.getElementById('student-answer').value.trim().toUpperCase();
+      const targetAns = currentProblem.ans.toUpperCase();
+
+      if (!userAns) return;
+
+      for (let i = 0; i < Math.max(userAns.length, targetAns.length); i++) {
+        if (userAns[i] && targetAns[i] && userAns[i] === targetAns[i]) {
+          correctDigitsLogged++;
+        }
+        totalDigitsAttempted++;
+      }
+
+      nextProblem();
+    }
+
+    async function finishProbe() {
+      clearInterval(timerInterval);
+      document.getElementById('probe-active').style.display = 'none';
+      document.getElementById('probe-results').style.display = 'block';
+
+      const durationInMinutes = Math.max(timeElapsed / 60, 0.1); 
+      const dcpm = Math.round(correctDigitsLogged / durationInMinutes);
+      const acc = totalDigitsAttempted > 0 ? Math.round((correctDigitsLogged / totalDigitsAttempted) * 100) : 0;
+
+      document.getElementById('res-dcpm').innerText = dcpm;
+      document.getElementById('res-accuracy').innerText = acc + '%';
+
+      if (!currentStudent.tests) currentStudent.tests = [];
+      currentStudent.tests.push({ date: new Date().toLocaleDateString(), dcpm, acc });
+      
+      let totalDcpm = 0, totalAcc = 0;
+      currentStudent.tests.forEach(t => {
+        totalDcpm += t.dcpm;
+        totalAcc += t.acc;
+      });
+      currentStudent.avgDcpm = Math.round(totalDcpm / currentStudent.tests.length);
+      currentStudent.avgAcc = Math.round(totalAcc / currentStudent.tests.length);
+
+      await syncToDB();
+    }
+
+    function resetProbe() {
+      document.getElementById('probe-results').style.display = 'none';
+      document.getElementById('probe-setup').style.display = 'block';
+      if (!isStudentOnlyMode) switchView('dashboard');
+    }
+  </script>
+</body>
+</html>
